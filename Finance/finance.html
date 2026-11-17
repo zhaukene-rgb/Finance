@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Twofold — Couple's Shared Expense Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: {
+            canvas: '#F8F7F4',
+            ink: '#18181B',
+            muted: '#71717A',
+            p1: { DEFAULT: '#4F46E5', light: '#EEF2FF', text: '#3730A3' },
+            p2: { DEFAULT: '#E11D48', light: '#FFF1F2', text: '#9F1239' }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #F8F7F4;
+      color: #18181B;
+    }
+    .glass-card {
+      background: #FFFFFF;
+      border: 1px solid rgba(24, 24, 27, 0.08);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 6px 16px rgba(0, 0, 0, 0.02);
+    }
+    .tab-btn[aria-selected="true"] {
+      background-color: #18181B;
+      color: #FFFFFF;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="min-h-screen antialiased selection:bg-indigo-100 selection:text-indigo-900">
+
+  <!-- Top Navigation & Partner Switcher -->
+  <header class="sticky top-0 z-30 border-b border-zinc-200/80 bg-white/90 backdrop-blur-md">
+    <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+      <!-- Brand -->
+      <div class="flex items-center gap-2.5">
+        <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-900 text-white shadow-sm">
+          <i data-lucide="wallet" class="h-4 w-4"></i>
+        </div>
+        <div>
+          <h1 class="text-base font-bold tracking-tight text-zinc-900 leading-none">Twofold</h1>
+          <p class="mt-0.5 text-[11px] font-medium text-zinc-500">Shared Couple Ledger</p>
+        </div>
+      </div>
+
+      <!-- Active Partner Switcher -->
+      <div class="flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-100/80 p-1" role="group" aria-label="Active Partner">
+        <span class="hidden pl-2.5 text-xs font-medium text-zinc-500 sm:inline">Posting as:</span>
+        <button id="switchP1Btn" type="button" class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all">
+          <span class="h-2 w-2 rounded-full bg-indigo-600"></span>
+          <span id="headerP1Name">Alex</span>
+        </button>
+        <button id="switchP2Btn" type="button" class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all">
+          <span class="h-2 w-2 rounded-full bg-rose-600"></span>
+          <span id="headerP2Name">Maya</span>
+        </button>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center gap-2">
+        <button id="openSyncBtn" type="button" class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50">
+          <span id="syncDot" class="h-2 w-2 rounded-full bg-amber-400"></span>
+          <span id="syncStatusLabel">Sync</span>
+        </button>
+        <button id="openSettingsBtn" type="button" class="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white p-2 text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900" aria-label="Settings">
+          <i data-lucide="sliders-horizontal" class="h-4 w-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+    <!-- View Tabs -->
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div class="inline-flex rounded-xl border border-zinc-200 bg-white p-1 shadow-sm" role="tablist">
+        <button id="tabDashboard" type="button" role="tab" aria-selected="true" class="tab-btn rounded-lg px-4 py-1.5 text-xs font-semibold text-zinc-600 transition">
+          Expenses & Split
+        </button>
+        <button id="tabAnalytics" type="button" role="tab" aria-selected="false" class="tab-btn rounded-lg px-4 py-1.5 text-xs font-semibold text-zinc-600 transition">
+          Insights & Charts
+        </button>
+        <button id="tabGoals" type="button" role="tab" aria-selected="false" class="tab-btn rounded-lg px-4 py-1.5 text-xs font-semibold text-zinc-600 transition">
+          Shared Goals
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <label for="monthFilter" class="text-xs font-medium text-zinc-500">Period:</label>
+        <select id="monthFilter" class="rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-800 outline-none focus:border-zinc-400">
+          <option value="all">All Time</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Summary KPI Strip -->
+    <section class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <!-- Total Spent -->
+      <div class="glass-card rounded-2xl p-4">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-zinc-500">Total Spent</span>
+          <span class="rounded-lg bg-zinc-100 p-1.5 text-zinc-600"><i data-lucide="receipt" class="h-3.5 w-3.5"></i></span>
+        </div>
+        <p id="kpiTotalSpent" class="mt-2 text-2xl font-bold tracking-tight text-zinc-900">$0.00</p>
+        <p id="kpiEntryCount" class="mt-1 text-xs text-zinc-500">0 transactions</p>
+      </div>
+
+      <!-- Partner 1 Paid -->
+      <div class="glass-card rounded-2xl p-4">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-zinc-500"><span class="p1-name-label">Alex</span> Paid</span>
+          <span class="rounded-lg bg-indigo-50 p-1.5 text-indigo-600"><i data-lucide="user" class="h-3.5 w-3.5"></i></span>
+        </div>
+        <p id="kpiP1Paid" class="mt-2 text-2xl font-bold tracking-tight text-indigo-600">$0.00</p>
+        <p id="kpiP1Share" class="mt-1 text-xs text-zinc-500">0% of total</p>
+      </div>
+
+      <!-- Partner 2 Paid -->
+      <div class="glass-card rounded-2xl p-4">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-zinc-500"><span class="p2-name-label">Maya</span> Paid</span>
+          <span class="rounded-lg bg-rose-50 p-1.5 text-rose-600"><i data-lucide="heart" class="h-3.5 w-3.5"></i></span>
+        </div>
+        <p id="kpiP2Paid" class="mt-2 text-2xl font-bold tracking-tight text-rose-600">$0.00</p>
+        <p id="kpiP2Share" class="mt-1 text-xs text-zinc-500">0% of total</p>
+      </div>
+
+      <!-- Net Balance / Settle Up -->
+      <div class="glass-card flex flex-col justify-between rounded-2xl p-4">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-zinc-500">Split Balance</span>
+            <span class="rounded-lg bg-emerald-50 p-1.5 text-emerald-600"><i data-lucide="scale" class="h-3.5 w-3.5"></i></span>
+          </div>
+          <p id="kpiBalanceText" class="mt-2 text-base font-bold text-zinc-900">All settled up</p>
+          <p id="kpiBalanceSub" class="mt-0.5 text-xs text-zinc-500">50/50 shared expenses</p>
+        </div>
+        <button id="settleUpBtn" type="button" class="mt-2 hidden w-full rounded-xl bg-zinc-900 py-1.5 text-xs font-semibold text-white transition hover:bg-zinc-800">
+          Mark as Settled
+        </button>
+      </div>
+    </section>
+
+    <!-- Individual Monthly Budgets -->
+    <section class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div class="glass-card rounded-2xl p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-indigo-600"></span>
+            <span class="text-xs font-semibold text-zinc-800"><span class="p1-name-label">Yernazar</span>'s Monthly Budget</span>
+            <span id="p1BudgetBadge" class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">On Track</span>
+          </div>
+          <span id="p1BudgetNumbers" class="text-xs font-semibold text-zinc-600">$0 / $800</span>
+        </div>
+        <div class="mt-2.5 h-2.5 w-full overflow-hidden rounded-full bg-zinc-100">
+          <div id="p1BudgetBar" class="h-full rounded-full bg-indigo-600 transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="h-2 w-2 rounded-full bg-rose-600"></span>
+            <span class="text-xs font-semibold text-zinc-800"><span class="p2-name-label">Aiym</span>'s Monthly Budget</span>
+            <span id="p2BudgetBadge" class="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">On Track</span>
+          </div>
+          <span id="p2BudgetNumbers" class="text-xs font-semibold text-zinc-600">$0 / $700</span>
+        </div>
+        <div class="mt-2.5 h-2.5 w-full overflow-hidden rounded-full bg-zinc-100">
+          <div id="p2BudgetBar" class="h-full rounded-full bg-rose-600 transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 1: EXPENSES & SPLIT -->
+    <div id="viewDashboard" class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <!-- Left Column: Add Expense Form -->
+      <aside class="lg:col-span-4">
+        <div class="glass-card rounded-2xl p-5 lg:sticky lg:top-20">
+          <div class="mb-4 flex items-center justify-between">
+            <h2 class="text-sm font-bold text-zinc-900">Log New Expense</h2>
+            <span id="activePosterPill" class="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700">As Alex</span>
+          </div>
+
+          <form id="expenseForm" class="space-y-3.5">
+            <div>
+              <label for="expTitle" class="mb-1 block text-xs font-medium text-zinc-600">What was it for?</label>
+              <input id="expTitle" type="text" required maxlength="60" placeholder="e.g. Coffee & croissants, Groceries" class="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:bg-white" />
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="expAmount" class="mb-1 block text-xs font-medium text-zinc-600">Amount (<span class="currency-symbol">$</span>)</label>
+                <input id="expAmount" type="number" step="0.01" min="0.01" required placeholder="0.00" class="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 px-3 py-2 text-sm font-semibold text-zinc-900 outline-none transition focus:border-zinc-400 focus:bg-white" />
+              </div>
+              <div>
+                <label for="expDate" class="mb-1 block text-xs font-medium text-zinc-600">Date</label>
+                <input id="expDate" type="date" required class="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:bg-white" />
+              </div>
+            </div>
+
+            <div>
+              <label for="expCategory" class="mb-1 block text-xs font-medium text-zinc-600">Category</label>
+              <select id="expCategory" class="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-zinc-400 focus:bg-white">
+                <option value="Food & Dining">Food & Dining</option>
+                <option value="Groceries">Groceries</option>
+                <option value="Coffee & Dates">Coffee & Dates</option>
+                <option value="Transport">Transport</option>
+                <option value="Rent & Bills">Rent & Bills</option>
+                <option value="Shopping">Shopping</option>
+                <option value="Travel">Travel</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="mb-1.5 block text-xs font-medium text-zinc-600">How should this be split?</label>
+              <div class="grid grid-cols-3 gap-1.5" id="splitTypeGroup">
+                <button type="button" data-split="50-50" class="split-opt rounded-xl border border-zinc-900 bg-zinc-900 px-2 py-2 text-[11px] font-semibold text-white transition">
+                  50 / 50
+                </button>
+                <button type="button" data-split="for-partner" class="split-opt rounded-xl border border-zinc-200 bg-white px-2 py-2 text-[11px] font-semibold text-zinc-600 transition hover:bg-zinc-50">
+                  For Partner
+                </button>
+                <button type="button" data-split="personal" class="split-opt rounded-xl border border-zinc-200 bg-white px-2 py-2 text-[11px] font-semibold text-zinc-600 transition hover:bg-zinc-50">
+                  Personal
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label for="expNote" class="mb-1 block text-xs font-medium text-zinc-600">Note (optional)</label>
+              <input id="expNote" type="text" maxlength="100" placeholder="Add a quick note for your partner..." class="w-full rounded-xl border border-zinc-200 bg-zinc-50/50 px-3 py-2 text-xs text-zinc-900 outline-none transition focus:border-zinc-400 focus:bg-white" />
+            </div>
+
+            <button type="submit" class="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800 active:scale-[0.99]">
+              <i data-lucide="plus" class="h-4 w-4"></i>
+              <span>Add Expense</span>
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      <!-- Right Column: Shared Expense Feed -->
+      <section class="lg:col-span-8">
+        <div class="glass-card rounded-2xl p-5">
+          <!-- Feed Filters -->
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button type="button" data-who="all" class="who-filter rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition">All</button>
+              <button type="button" data-who="p1" class="who-filter rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-200"><span class="p1-name-label">Alex</span></button>
+              <button type="button" data-who="p2" class="who-filter rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-200"><span class="p2-name-label">Maya</span></button>
+            </div>
+
+            <div class="flex flex-1 items-center justify-end gap-2 sm:flex-initial">
+              <div class="relative w-full sm:w-48">
+                <i data-lucide="search" class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400"></i>
+                <input id="searchInput" type="text" placeholder="Search expenses..." class="w-full rounded-xl border border-zinc-200 bg-zinc-50/70 py-1.5 pl-8 pr-3 text-xs text-zinc-900 outline-none focus:border-zinc-400 focus:bg-white" />
+              </div>
+              <select id="categoryFilter" class="rounded-xl border border-zinc-200 bg-zinc-50/70 px-2.5 py-1.5 text-xs font-medium text-zinc-700 outline-none focus:border-zinc-400">
+                <option value="all">All Categories</option>
+                <option value="Food & Dining">Food & Dining</option>
+                <option value="Groceries">Groceries</option>
+                <option value="Coffee & Dates">Coffee & Dates</option>
+                <option value="Transport">Transport</option>
+                <option value="Rent & Bills">Rent & Bills</option>
+                <option value="Shopping">Shopping</option>
+                <option value="Travel">Travel</option>
+                <option value="Settlement">Settlement</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Expense List -->
+          <div id="expenseList" class="space-y-2.5"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- VIEW 2: INSIGHTS & CHARTS -->
+    <div id="viewAnalytics" class="hidden grid-cols-1 gap-6 lg:grid-cols-2">
+      <div class="glass-card rounded-2xl p-5">
+        <div class="mb-4 flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-zinc-900">Spending by Category</h3>
+            <p class="text-xs text-zinc-500">Where your money goes together</p>
+          </div>
+        </div>
+        <div class="relative h-72">
+          <canvas id="categoryChart"></canvas>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl p-5">
+        <div class="mb-4 flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-zinc-900">Daily Spending Comparison</h3>
+            <p class="text-xs text-zinc-500">Side-by-side daily activity</p>
+          </div>
+        </div>
+        <div class="relative h-72">
+          <canvas id="dailyChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 3: SHARED GOALS -->
+    <div id="viewGoals" class="hidden space-y-6">
+      <div class="glass-card flex flex-wrap items-center justify-between gap-4 rounded-2xl p-5">
+        <div>
+          <h2 class="text-sm font-bold text-zinc-900">Couple Savings & Wishlist Goals</h2>
+          <p class="text-xs text-zinc-500">Save together for trips, date nights, or home upgrades</p>
+        </div>
+        <form id="goalForm" class="flex flex-wrap items-center gap-2">
+          <input id="goalTitle" type="text" required placeholder="Goal name (e.g. Weekend Trip)" class="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs outline-none focus:border-zinc-400 focus:bg-white" />
+          <input id="goalTarget" type="number" min="1" step="1" required placeholder="Target amount" class="w-32 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs outline-none focus:border-zinc-400 focus:bg-white" />
+          <button type="submit" class="rounded-xl bg-zinc-900 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-zinc-800">
+            + Add Goal
+          </button>
+        </form>
+      </div>
+
+      <div id="goalsGrid" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+    </div>
+  </main>
+
+  <!-- SYNC MODAL -->
+  <div id="syncModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-zinc-900/40 p-4 backdrop-blur-xs">
+    <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+      <div class="mb-4 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold text-zinc-900">Two-Partner Sync Options</h3>
+          <p class="text-xs text-zinc-500">Share updates between your device and your partner's</p>
+        </div>
+        <button id="closeSyncBtn" type="button" class="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700">
+          <i data-lucide="x" class="h-4 w-4"></i>
+        </button>
+      </div>
+
+      <!-- Option 1: Live Cloud Sync (Firebase Realtime DB) -->
+      <div class="mb-5 rounded-xl border border-zinc-200 bg-zinc-50/70 p-4">
+        <div class="mb-2 flex items-center justify-between">
+          <span class="text-xs font-bold text-zinc-900">1. Live Cloud Sync (Real-Time)</span>
+          <span id="cloudBadge" class="rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-700">Not Connected</span>
+        </div>
+        <p class="mb-3 text-xs text-zinc-600">
+          Paste a free Firebase Realtime Database URL and a shared Room Code. Both partners using the same URL and Room Code will see each other's expenses automatically.
+        </p>
+        <div class="space-y-2">
+          <input id="firebaseUrlInput" type="url" placeholder="https://your-project-default-rtdb.firebaseio.com" class="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs outline-none focus:border-zinc-400" />
+          <div class="flex gap-2">
+            <input id="roomCodeInput" type="text" placeholder="Room code (e.g. alex-maya-2026)" class="flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs outline-none focus:border-zinc-400" />
+            <button id="connectCloudBtn" type="button" class="rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800">Connect</button>
+          </div>
+          <button id="disconnectCloudBtn" type="button" class="hidden text-xs font-semibold text-rose-600 hover:underline">Disconnect Live Sync</button>
+        </div>
+      </div>
+
+      <!-- Option 2: Instant Sync Code -->
+      <div class="rounded-xl border border-zinc-200 p-4">
+        <span class="text-xs font-bold text-zinc-900">2. Quick Share Code (No Setup)</span>
+        <p class="mt-1 mb-3 text-xs text-zinc-600">Copy your current ledger as a sync code to send to your partner, or paste their code to merge updates.</p>
+        <div class="flex flex-wrap gap-2">
+          <button id="copySyncCodeBtn" type="button" class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 hover:bg-zinc-50">
+            <i data-lucide="copy" class="h-3.5 w-3.5"></i> Copy Sync Code
+          </button>
+          <button id="exportCsvBtn" type="button" class="inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-800 hover:bg-zinc-50">
+            <i data-lucide="download" class="h-3.5 w-3.5"></i> Export CSV
+          </button>
+        </div>
+        <div class="mt-3 flex gap-2">
+          <input id="importCodeInput" type="text" placeholder="Paste partner's sync code here..." class="flex-1 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs outline-none focus:border-zinc-400 focus:bg-white" />
+          <button id="importCodeBtn" type="button" class="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-indigo-700">Merge</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settingsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-zinc-900/40 p-4 backdrop-blur-xs">
+    <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+      <div class="mb-4 flex items-center justify-between">
+        <h3 class="text-base font-bold text-zinc-900">Couple Settings</h3>
+        <button id="closeSettingsBtn" type="button" class="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700">
+          <i data-lucide="x" class="h-4 w-4"></i>
+        </button>
+      </div>
+      <form id="settingsForm" class="space-y-3.5">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="setP1Name" class="mb-1 block text-xs font-medium text-zinc-600">Partner 1 Name</label>
+            <input id="setP1Name" type="text" required maxlength="20" class="w-full rounded-xl border border-zinc-200 px-3 py-2 text-xs font-semibold outline-none focus:border-zinc-400" />
+          </div>
+          <div>
+            <label for="setP2Name" class="mb-1 block text-xs font-medium text-zinc-600">Partner 2 Name</label>
+            <input id="setP2Name" type="text" required maxlength="20" class="w-full rounded-xl border border-zinc-200 px-3 py-2 text-xs font-semibold outline-none focus:border-zinc-400" />
+          </div>
+        </div>
+        <div>
+          <label for="setCurrency" class="mb-1 block text-xs font-medium text-zinc-600">Currency</label>
+          <select id="setCurrency" class="w-full rounded-xl border border-zinc-200 px-3 py-2 text-xs font-semibold outline-none focus:border-zinc-400">
+            <option value="$">USD ($)</option>
+            <option value="₸">KZT (₸)</option>
+            <option value="€">EUR (€)</option>
+            <option value="£">GBP (£)</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="setP1Budget" class="mb-1 block text-xs font-medium text-zinc-600"><span class="p1-name-label">Yernazar</span>'s Budget</label>
+            <input id="setP1Budget" type="number" min="1" step="1" required class="w-full rounded-xl border border-zinc-200 px-3 py-2 text-xs font-semibold outline-none focus:border-zinc-400" />
+          </div>
+          <div>
+            <label for="setP2Budget" class="mb-1 block text-xs font-medium text-zinc-600"><span class="p2-name-label">Aiym</span>'s Budget</label>
+            <input id="setP2Budget" type="number" min="1" step="1" required class="w-full rounded-xl border border-zinc-200 px-3 py-2 text-xs font-semibold outline-none focus:border-zinc-400" />
+          </div>
+        </div>
+        <div class="flex items-center justify-between pt-2">
+          <button id="clearAllDataBtn" type="button" class="text-xs font-semibold text-rose-600 hover:underline">Clear All Data</button>
+          <button type="submit" class="rounded-xl bg-zinc-900 px-4 py-2 text-xs font-semibold text-white hover:bg-zinc-800">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="pointer-events-none fixed bottom-5 right-5 z-50 translate-y-4 rounded-xl bg-zinc-900 px-4 py-2.5 text-xs font-semibold text-white opacity-0 shadow-lg transition-all duration-200"></div>
+
+  <script>
+    const STORAGE_KEY = 'twofold_couple_ledger_v1';
+
+    const todayStr = () => new Date().toISOString().slice(0, 10);
+    const daysAgoStr = (days) => {
+      const d = new Date();
+      d.setDate(d.getDate() - days);
+      return d.toISOString().slice(0, 10);
+    };
+
+    const defaultState = () => ({
+      activeUser: 'p1',
+      settings: {
+        p1Name: 'Yernazar',
+        p2Name: 'Aiym',
+        currency: '$',
+        p1Budget: 800,
+        p2Budget: 700
+      },
+      cloud: {
+        url: '',
+        room: ''
+      },
+      expenses: [
+        { id: 'e1', title: 'Morning Coffee & Pastries', amount: 18.50, category: 'Coffee & Dates', paidBy: 'p1', splitType: '50-50', date: daysAgoStr(0), note: 'From our favorite corner cafe', createdAt: Date.now() - 3600000 },
+        { id: 'e2', title: 'Weekly Grocery Run', amount: 86.40, category: 'Groceries', paidBy: 'p2', splitType: '50-50', date: daysAgoStr(1), note: 'Produce, pasta, oat milk', createdAt: Date.now() - 86400000 },
+        { id: 'e3', title: 'Movie Night Tickets', amount: 32.00, category: 'Coffee & Dates', paidBy: 'p1', splitType: '50-50', date: daysAgoStr(2), note: 'IMAX evening show', createdAt: Date.now() - 172800000 },
+        { id: 'e4', title: 'Uber Ride Home', amount: 14.20, category: 'Transport', paidBy: 'p2', splitType: '50-50', date: daysAgoStr(3), note: 'Late night ride', createdAt: Date.now() - 259200000 },
+        { id: 'e5', title: 'Surprise Bouquet', amount: 28.00, category: 'Other', paidBy: 'p1', splitType: 'personal', date: daysAgoStr(4), note: 'Just because', createdAt: Date.now() - 345600000 }
+      ],
+      goals: [
+        { id: 'g1', title: 'Weekend Mountain Getaway', target: 600, p1Saved: 180, p2Saved: 160 },
+        { id: 'g2', title: 'Espresso Machine', target: 350, p1Saved: 100, p2Saved: 120 }
+      ]
+    });
+
+    let state = loadState();
+    let selectedSplit = '50-50';
+    let filterWho = 'all';
+    let filterCategory = 'all';
+    let filterMonth = 'all';
+    let searchQuery = '';
+    let activeTab = 'dashboard';
+    let categoryChartInstance = null;
+    let dailyChartInstance = null;
+    let syncInterval = null;
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return defaultState();
+        const parsed = JSON.parse(raw);
+        return { ...defaultState(), ...parsed, settings: { ...defaultState().settings, ...(parsed.settings || {}) }, cloud: { ...defaultState().cloud, ...(parsed.cloud || {}) } };
+      } catch {
+        return defaultState();
+      }
+    }
+
+    function saveState(pushCloud = true) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch {
+        // Ignore storage quota or sandbox restriction
+      }
+      if (pushCloud && state.cloud.url && state.cloud.room) {
+        pushToCloud();
+      }
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.remove('opacity-0', 'translate-y-4');
+      el.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => {
+        el.classList.add('opacity-0', 'translate-y-4');
+        el.classList.remove('opacity-100', 'translate-y-0');
+      }, 2600);
+    }
+
+    function fmtMoney(num) {
+      const sym = state.settings.currency || '$';
+      const val = Number(num) || 0;
+      if (sym === '₸') {
+        return `${sym}${Math.round(val).toLocaleString('en-US')}`;
+      }
+      return `${sym}${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    function escapeHtml(str) {
+      return String(str || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+    }
+
+    // Cloud Sync (Firebase Realtime DB REST)
+    async function pushToCloud() {
+      if (!state.cloud.url || !state.cloud.room) return;
+      const base = state.cloud.url.replace(/\/+$/, '');
+      const endpoint = `${base}/twofold/${encodeURIComponent(state.cloud.room)}.json`;
+      try {
+        await fetch(endpoint, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            settings: state.settings,
+            expenses: state.expenses,
+            goals: state.goals,
+            updatedAt: Date.now()
+          })
+        });
+      } catch {
+        updateSyncIndicator(false);
+      }
+    }
+
+    async function pullFromCloud(silent = true) {
+      if (!state.cloud.url || !state.cloud.room) return;
+      const base = state.cloud.url.replace(/\/+$/, '');
+      const endpoint = `${base}/twofold/${encodeURIComponent(state.cloud.room)}.json`;
+      try {
+        const res = await fetch(endpoint);
+        if (!res.ok) throw new Error('Sync failed');
+        const remote = await res.json();
+        if (remote && Array.isArray(remote.expenses)) {
+          state.expenses = remote.expenses;
+          if (remote.settings) state.settings = { ...state.settings, ...remote.settings };
+          if (Array.isArray(remote.goals)) state.goals = remote.goals;
+          saveState(false);
+          renderAll();
+        } else if (remote === null) {
+          await pushToCloud();
+        }
+        updateSyncIndicator(true);
+        if (!silent) showToast('Connected to live couple sync!');
+      } catch {
+        updateSyncIndicator(false);
+        if (!silent) showToast('Could not reach database URL. Check permissions or URL.');
+      }
+    }
+
+    function startCloudPolling() {
+      if (syncInterval) clearInterval(syncInterval);
+      if (state.cloud.url && state.cloud.room) {
+        updateSyncIndicator(true);
+        syncInterval = setInterval(() => pullFromCloud(true), 5000);
+      } else {
+        updateSyncIndicator(false);
+      }
+    }
+
+    function updateSyncIndicator(connected) {
+      const dot = document.getElementById('syncDot');
+      const label = document.getElementById('syncStatusLabel');
+      const badge = document.getElementById('cloudBadge');
+      const discBtn = document.getElementById('disconnectCloudBtn');
+      if (state.cloud.url && state.cloud.room && connected) {
+        dot.className = 'h-2 w-2 rounded-full bg-emerald-500 animate-pulse';
+        label.textContent = 'Live Sync';
+        badge.textContent = `Connected: ${state.cloud.room}`;
+        badge.className = 'rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700';
+        discBtn.classList.remove('hidden');
+      } else if (state.cloud.url && state.cloud.room) {
+        dot.className = 'h-2 w-2 rounded-full bg-rose-500';
+        label.textContent = 'Sync Offline';
+        badge.textContent = 'Connection Error';
+        badge.className = 'rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700';
+        discBtn.classList.remove('hidden');
+      } else {
+        dot.className = 'h-2 w-2 rounded-full bg-amber-400';
+        label.textContent = 'Sync';
+        badge.textContent = 'Local Mode';
+        badge.className = 'rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-semibold text-zinc-700';
+        discBtn.classList.add('hidden');
+      }
+    }
+
+    function getPeriodExpenses() {
+      return state.expenses.filter((e) => {
+        if (filterMonth !== 'all' && (!e.date || !e.date.startsWith(filterMonth))) return false;
+        return true;
+      });
+    }
+
+    function getFilteredExpenses() {
+      return getPeriodExpenses()
+        .filter((e) => {
+          if (filterWho !== 'all' && e.paidBy !== filterWho) return false;
+          if (filterCategory !== 'all' && e.category !== filterCategory) return false;
+          if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            const hay = `${e.title} ${e.note || ''} ${e.category}`.toLowerCase();
+            if (!hay.includes(q)) return false;
+          }
+          return true;
+        })
+        .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.createdAt || 0) - (a.createdAt || 0));
+    }
+
+    function renderHeaderAndLabels() {
+      const { p1Name, p2Name, currency } = state.settings;
+      document.getElementById('headerP1Name').textContent = p1Name;
+      document.getElementById('headerP2Name').textContent = p2Name;
+      document.querySelectorAll('.p1-name-label').forEach((el) => (el.textContent = p1Name));
+      document.querySelectorAll('.p2-name-label').forEach((el) => (el.textContent = p2Name));
+      document.querySelectorAll('.currency-symbol').forEach((el) => (el.textContent = currency));
+
+      const p1Btn = document.getElementById('switchP1Btn');
+      const p2Btn = document.getElementById('switchP2Btn');
+      const pill = document.getElementById('activePosterPill');
+
+      if (state.activeUser === 'p1') {
+        p1Btn.className = 'flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-xs transition-all';
+        p2Btn.className = 'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 transition-all';
+        pill.textContent = `As ${p1Name}`;
+        pill.className = 'rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700';
+      } else {
+        p2Btn.className = 'flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-xs transition-all';
+        p1Btn.className = 'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-900 transition-all';
+        pill.textContent = `As ${p2Name}`;
+        pill.className = 'rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700';
+      }
+    }
+
+    function populateMonthFilter() {
+      const sel = document.getElementById('monthFilter');
+      const months = new Set(state.expenses.map((e) => (e.date || '').slice(0, 7)).filter(Boolean));
+      const sorted = Array.from(months).sort().reverse();
+      const currentVal = filterMonth;
+      sel.innerHTML = '<option value="all">All Time</option>' + sorted.map((m) => `<option value="${m}">${m}</option>`).join('');
+      sel.value = sorted.includes(currentVal) ? currentVal : 'all';
+      filterMonth = sel.value;
+    }
+
+    function renderKPIs() {
+      const items = getPeriodExpenses();
+      const nonSettlements = items.filter((e) => e.category !== 'Settlement');
+      const total = nonSettlements.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const p1Paid = nonSettlements.filter((e) => e.paidBy === 'p1').reduce((s, e) => s + Number(e.amount || 0), 0);
+      const p2Paid = nonSettlements.filter((e) => e.paidBy === 'p2').reduce((s, e) => s + Number(e.amount || 0), 0);
+
+      document.getElementById('kpiTotalSpent').textContent = fmtMoney(total);
+      document.getElementById('kpiEntryCount').textContent = `${nonSettlements.length} transaction${nonSettlements.length === 1 ? '' : 's'}`;
+      document.getElementById('kpiP1Paid').textContent = fmtMoney(p1Paid);
+      document.getElementById('kpiP2Paid').textContent = fmtMoney(p2Paid);
+
+      const p1Pct = total > 0 ? Math.round((p1Paid / total) * 100) : 0;
+      const p2Pct = total > 0 ? 100 - p1Pct : 0;
+      document.getElementById('kpiP1Share').textContent = `${p1Pct}% of total`;
+      document.getElementById('kpiP2Share').textContent = `${p2Pct}% of total`;
+
+      // Calculate net balance across ALL expenses (including settlements) so balance stays accurate
+      let p2OwesP1 = 0;
+      state.expenses.forEach((e) => {
+        const amt = Number(e.amount || 0);
+        if (e.category === 'Settlement') {
+          if (e.paidBy === 'p2') p2OwesP1 -= amt;
+          else p2OwesP1 += amt;
+        } else if (e.splitType === '50-50') {
+          if (e.paidBy === 'p1') p2OwesP1 += amt / 2;
+          else p2OwesP1 -= amt / 2;
+        } else if (e.splitType === 'for-partner') {
+          if (e.paidBy === 'p1') p2OwesP1 += amt;
+          else p2OwesP1 -= amt;
+        }
+      });
+
+      const balText = document.getElementById('kpiBalanceText');
+      const balSub = document.getElementById('kpiBalanceSub');
+      const settleBtn = document.getElementById('settleUpBtn');
+      const { p1Name, p2Name } = state.settings;
+
+      if (Math.abs(p2OwesP1) < 0.01) {
+        balText.textContent = 'All settled up';
+        balText.className = 'mt-2 text-base font-bold text-emerald-600';
+        balSub.textContent = 'No pending balance';
+        settleBtn.classList.add('hidden');
+      } else if (p2OwesP1 > 0) {
+        balText.textContent = `${p2Name} owes ${p1Name} ${fmtMoney(p2OwesP1)}`;
+        balText.className = 'mt-2 text-base font-bold text-zinc-900';
+        balSub.textContent = 'Net shared balance';
+        settleBtn.classList.remove('hidden');
+        settleBtn.dataset.debtor = 'p2';
+        settleBtn.dataset.amount = p2OwesP1.toFixed(2);
+      } else {
+        balText.textContent = `${p1Name} owes ${p2Name} ${fmtMoney(Math.abs(p2OwesP1))}`;
+        balText.className = 'mt-2 text-base font-bold text-zinc-900';
+        balSub.textContent = 'Net shared balance';
+        settleBtn.classList.remove('hidden');
+        settleBtn.dataset.debtor = 'p1';
+        settleBtn.dataset.amount = Math.abs(p2OwesP1).toFixed(2);
+      }
+
+      // Individual monthly budget progress (current calendar month)
+      const currentMonth = todayStr().slice(0, 7);
+      const updatePartnerBudget = (partnerKey, barId, badgeId, numId, defaultColor) => {
+        const spend = state.expenses
+          .filter((e) => e.paidBy === partnerKey && e.category !== 'Settlement' && (e.date || '').startsWith(currentMonth))
+          .reduce((s, e) => s + Number(e.amount || 0), 0);
+        const budgetVal = partnerKey === 'p1'
+          ? (state.settings.p1Budget ?? state.settings.monthlyBudget ?? 800)
+          : (state.settings.p2Budget ?? state.settings.monthlyBudget ?? 700);
+        const budget = Math.max(1, Number(budgetVal));
+        const pct = Math.min(100, Math.round((spend / budget) * 100));
+
+        document.getElementById(numId).textContent = `${fmtMoney(spend)} / ${fmtMoney(budget)} (${pct}%)`;
+        const bar = document.getElementById(barId);
+        const badge = document.getElementById(badgeId);
+        bar.style.width = `${pct}%`;
+
+        if (spend > budget) {
+          bar.className = 'h-full rounded-full bg-rose-600 transition-all duration-300';
+          badge.textContent = 'Over Budget';
+          badge.className = 'rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700';
+        } else if (pct >= 80) {
+          bar.className = 'h-full rounded-full bg-amber-500 transition-all duration-300';
+          badge.textContent = 'Near Limit';
+          badge.className = 'rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700';
+        } else {
+          bar.className = `h-full rounded-full ${defaultColor} transition-all duration-300`;
+          badge.textContent = 'On Track';
+          badge.className = 'rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700';
+        }
+      };
+      updatePartnerBudget('p1', 'p1BudgetBar', 'p1BudgetBadge', 'p1BudgetNumbers', 'bg-indigo-600');
+      updatePartnerBudget('p2', 'p2BudgetBar', 'p2BudgetBadge', 'p2BudgetNumbers', 'bg-rose-500');
+    }
+
+    function renderExpenseList() {
+      const container = document.getElementById('expenseList');
+      const items = getFilteredExpenses();
+      const { p1Name, p2Name } = state.settings;
+
+      if (items.length === 0) {
+        container.innerHTML = `
+          <div class="rounded-2xl border border-dashed border-zinc-200 py-12 text-center">
+            <p class="text-sm font-semibold text-zinc-700">No expenses match this view</p>
+            <p class="mt-1 text-xs text-zinc-500">Add a new expense on the left or clear your filters.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const splitLabels = {
+        '50-50': '50/50 Split',
+        'for-partner': 'For Partner',
+        'personal': 'Personal'
+      };
+
+      container.innerHTML = items
+        .map((e) => {
+          const isP1 = e.paidBy === 'p1';
+          const payerName = isP1 ? p1Name : p2Name;
+          const badgeClass = isP1 ? 'bg-indigo-50 text-indigo-700' : 'bg-rose-50 text-rose-700';
+          const dotClass = isP1 ? 'bg-indigo-600' : 'bg-rose-600';
+          const splitText = e.category === 'Settlement' ? 'Settlement' : (splitLabels[e.splitType] || '50/50 Split');
+
+          return `
+            <div class="group flex items-center justify-between gap-3 rounded-xl border border-zinc-100 bg-zinc-50/50 px-3.5 py-3 transition hover:border-zinc-200 hover:bg-white">
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${badgeClass}">
+                    <span class="h-1.5 w-1.5 rounded-full ${dotClass}"></span>
+                    ${escapeHtml(payerName)}
+                  </span>
+                  <span class="text-sm font-semibold text-zinc-900 truncate">${escapeHtml(e.title)}</span>
+                </div>
+                <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+                  <span>${escapeHtml(e.date)}</span>
+                  <span>•</span>
+                  <span class="font-medium text-zinc-700">${escapeHtml(e.category)}</span>
+                  <span>•</span>
+                  <span>${escapeHtml(splitText)}</span>
+                  ${e.note ? `<span>•</span><span class="italic text-zinc-500 truncate max-w-[200px]">"${escapeHtml(e.note)}"</span>` : ''}
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="text-sm font-bold text-zinc-900">${fmtMoney(e.amount)}</span>
+                <button type="button" data-delete-id="${escapeHtml(e.id)}" class="delete-exp-btn rounded-lg p-1.5 text-zinc-400 opacity-70 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100" aria-label="Delete expense">
+                  <i data-lucide="trash-2" class="h-3.5 w-3.5"></i>
+                </button>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function renderCharts() {
+      if (activeTab !== 'analytics') return;
+      const items = getPeriodExpenses().filter((e) => e.category !== 'Settlement');
+
+      // Category Doughnut
+      const catMap = {};
+      items.forEach((e) => {
+        catMap[e.category] = (catMap[e.category] || 0) + Number(e.amount || 0);
+      });
+      const catLabels = Object.keys(catMap);
+      const catData = Object.values(catMap);
+      const palette = ['#4F46E5', '#E11D48', '#10B981', '#F59E0B', '#0EA5E9', '#8B5CF6', '#EC4899', '#71717A'];
+
+      const catCtx = document.getElementById('categoryChart').getContext('2d');
+      if (categoryChartInstance) categoryChartInstance.destroy();
+      categoryChartInstance = new Chart(catCtx, {
+        type: 'doughnut',
+        data: {
+          labels: catLabels.length ? catLabels : ['No Data'],
+          datasets: [{
+            data: catData.length ? catData : [1],
+            backgroundColor: catData.length ? palette.slice(0, catLabels.length) : ['#E4E4E7'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '64%',
+          plugins: {
+            legend: { position: 'right', labels: { boxWidth: 12, font: { family: 'Inter', size: 11 } } }
+          }
+        }
+      });
+
+      // Daily Comparison Bar Chart (last 7 active days)
+      const dayMap = {};
+      items.forEach((e) => {
+        if (!dayMap[e.date]) dayMap[e.date] = { p1: 0, p2: 0 };
+        dayMap[e.date][e.paidBy] += Number(e.amount || 0);
+      });
+      const days = Object.keys(dayMap).sort().slice(-7);
+      const dailyCtx = document.getElementById('dailyChart').getContext('2d');
+      if (dailyChartInstance) dailyChartInstance.destroy();
+      dailyChartInstance = new Chart(dailyCtx, {
+        type: 'bar',
+        data: {
+          labels: days.length ? days : [todayStr()],
+          datasets: [
+            {
+              label: state.settings.p1Name,
+              data: days.length ? days.map((d) => dayMap[d].p1) : [0],
+              backgroundColor: '#4F46E5',
+              borderRadius: 6
+            },
+            {
+              label: state.settings.p2Name,
+              data: days.length ? days.map((d) => dayMap[d].p2) : [0],
+              backgroundColor: '#E11D48',
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { family: 'Inter', size: 11 } } },
+            y: { beginAtZero: true, grid: { color: '#F4F4F5' }, ticks: { font: { family: 'Inter', size: 11 } } }
+          },
+          plugins: {
+            legend: { position: 'top', labels: { boxWidth: 12, font: { family: 'Inter', size: 11 } } }
+          }
+        }
+      });
+    }
+
+    function renderGoals() {
+      const grid = document.getElementById('goalsGrid');
+      const { p1Name, p2Name } = state.settings;
+      if (!state.goals.length) {
+        grid.innerHTML = '<p class="col-span-full py-8 text-center text-xs text-zinc-500">No shared goals yet. Add one above!</p>';
+        return;
+      }
+
+      grid.innerHTML = state.goals
+        .map((g) => {
+          const totalSaved = Number(g.p1Saved || 0) + Number(g.p2Saved || 0);
+          const pct = Math.min(100, Math.round((totalSaved / Math.max(1, g.target)) * 100));
+          const activeName = state.activeUser === 'p1' ? p1Name : p2Name;
+
+          return `
+            <div class="glass-card flex flex-col justify-between rounded-2xl p-4">
+              <div>
+                <div class="flex items-start justify-between gap-2">
+                  <h4 class="text-sm font-bold text-zinc-900">${escapeHtml(g.title)}</h4>
+                  <button type="button" data-del-goal="${escapeHtml(g.id)}" class="del-goal-btn rounded-lg p-1 text-zinc-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Delete goal">
+                    <i data-lucide="trash-2" class="h-3.5 w-3.5"></i>
+                  </button>
+                </div>
+                <p class="mt-1 text-xs font-semibold text-zinc-600">${fmtMoney(totalSaved)} / ${fmtMoney(g.target)} (${pct}%)</p>
+                <div class="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-zinc-100">
+                  <div class="h-full rounded-full bg-indigo-600 transition-all" style="width: ${pct}%"></div>
+                </div>
+                <div class="mt-2.5 flex justify-between text-[11px] text-zinc-500">
+                  <span>${escapeHtml(p1Name)}: ${fmtMoney(g.p1Saved)}</span>
+                  <span>${escapeHtml(p2Name)}: ${fmtMoney(g.p2Saved)}</span>
+                </div>
+              </div>
+              <form class="contribute-goal-form mt-4 flex gap-2" data-goal-id="${escapeHtml(g.id)}">
+                <input type="number" min="1" step="1" required placeholder="Add as ${escapeHtml(activeName)}" class="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 text-xs outline-none focus:border-zinc-400 focus:bg-white" />
+                <button type="submit" class="rounded-xl bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800">Add</button>
+              </form>
+            </div>
+          `;
+        })
+        .join('');
+
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function renderAll() {
+      renderHeaderAndLabels();
+      populateMonthFilter();
+      renderKPIs();
+      renderExpenseList();
+      renderCharts();
+      renderGoals();
+    }
+
+    // Event Wiring
+    document.getElementById('switchP1Btn').addEventListener('click', () => {
+      state.activeUser = 'p1';
+      saveState(false);
+      renderAll();
+    });
+
+    document.getElementById('switchP2Btn').addEventListener('click', () => {
+      state.activeUser = 'p2';
+      saveState(false);
+      renderAll();
+    });
+
+    // Split Type Buttons
+    document.getElementById('splitTypeGroup').addEventListener('click', (e) => {
+      const btn = e.target.closest('.split-opt');
+      if (!btn) return;
+      selectedSplit = btn.dataset.split;
+      document.querySelectorAll('.split-opt').forEach((b) => {
+        if (b.dataset.split === selectedSplit) {
+          b.className = 'split-opt rounded-xl border border-zinc-900 bg-zinc-900 px-2 py-2 text-[11px] font-semibold text-white transition';
+        } else {
+          b.className = 'split-opt rounded-xl border border-zinc-200 bg-white px-2 py-2 text-[11px] font-semibold text-zinc-600 transition hover:bg-zinc-50';
+        }
+      });
+    });
+
+    // Add Expense
+    document.getElementById('expDate').value = todayStr();
+    document.getElementById('expenseForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const title = document.getElementById('expTitle').value.trim();
+      const amount = parseFloat(document.getElementById('expAmount').value);
+      const date = document.getElementById('expDate').value || todayStr();
+      const category = document.getElementById('expCategory').value;
+      const note = document.getElementById('expNote').value.trim();
+      if (!title || isNaN(amount) || amount <= 0) return;
+
+      state.expenses.unshift({
+        id: 'e_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        title,
+        amount,
+        category,
+        paidBy: state.activeUser,
+        splitType: selectedSplit,
+        date,
+        note,
+        createdAt: Date.now()
+      });
+
+      document.getElementById('expTitle').value = '';
+      document.getElementById('expAmount').value = '';
+      document.getElementById('expNote').value = '';
+      saveState(true);
+      renderAll();
+      showToast('Expense added!');
+    });
+
+    // Delete Expense (delegated)
+    document.getElementById('expenseList').addEventListener('click', (e) => {
+      const btn = e.target.closest('.delete-exp-btn');
+      if (!btn) return;
+      const id = btn.dataset.deleteId;
+      state.expenses = state.expenses.filter((x) => x.id !== id);
+      saveState(true);
+      renderAll();
+      showToast('Expense removed');
+    });
+
+    // Settle Up
+    document.getElementById('settleUpBtn').addEventListener('click', (e) => {
+      const debtor = e.currentTarget.dataset.debtor;
+      const amount = parseFloat(e.currentTarget.dataset.amount);
+      if (!debtor || isNaN(amount) || amount <= 0) return;
+      const debtorName = debtor === 'p1' ? state.settings.p1Name : state.settings.p2Name;
+      state.expenses.unshift({
+        id: 's_' + Date.now(),
+        title: `Settlement Payment (${debtorName})`,
+        amount,
+        category: 'Settlement',
+        paidBy: debtor,
+        splitType: 'for-partner',
+        date: todayStr(),
+        note: 'Settled shared balance',
+        createdAt: Date.now()
+      });
+      saveState(true);
+      renderAll();
+      showToast('Balance settled!');
+    });
+
+    // Filters
+    document.querySelectorAll('.who-filter').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        filterWho = btn.dataset.who;
+        document.querySelectorAll('.who-filter').forEach((b) => {
+          b.className = b.dataset.who === filterWho
+            ? 'who-filter rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition'
+            : 'who-filter rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-200';
+        });
+        renderExpenseList();
+      });
+    });
+
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      searchQuery = e.target.value.trim();
+      renderExpenseList();
+    });
+
+    document.getElementById('categoryFilter').addEventListener('change', (e) => {
+      filterCategory = e.target.value;
+      renderExpenseList();
+    });
+
+    document.getElementById('monthFilter').addEventListener('change', (e) => {
+      filterMonth = e.target.value;
+      renderKPIs();
+      renderExpenseList();
+      renderCharts();
+    });
+
+    // Tabs
+    function switchTab(tab) {
+      activeTab = tab;
+      document.getElementById('tabDashboard').setAttribute('aria-selected', tab === 'dashboard');
+      document.getElementById('tabAnalytics').setAttribute('aria-selected', tab === 'analytics');
+      document.getElementById('tabGoals').setAttribute('aria-selected', tab === 'goals');
+
+      document.getElementById('viewDashboard').classList.toggle('hidden', tab !== 'dashboard');
+      document.getElementById('viewDashboard').classList.toggle('grid', tab === 'dashboard');
+
+      document.getElementById('viewAnalytics').classList.toggle('hidden', tab !== 'analytics');
+      document.getElementById('viewAnalytics').classList.toggle('grid', tab === 'analytics');
+
+      document.getElementById('viewGoals').classList.toggle('hidden', tab !== 'goals');
+
+      if (tab === 'analytics') renderCharts();
+    }
+
+    document.getElementById('tabDashboard').addEventListener('click', () => switchTab('dashboard'));
+    document.getElementById('tabAnalytics').addEventListener('click', () => switchTab('analytics'));
+    document.getElementById('tabGoals').addEventListener('click', () => switchTab('goals'));
+
+    // Goals
+    document.getElementById('goalForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const title = document.getElementById('goalTitle').value.trim();
+      const target = parseFloat(document.getElementById('goalTarget').value);
+      if (!title || isNaN(target) || target <= 0) return;
+      state.goals.push({ id: 'g_' + Date.now(), title, target, p1Saved: 0, p2Saved: 0 });
+      document.getElementById('goalTitle').value = '';
+      document.getElementById('goalTarget').value = '';
+      saveState(true);
+      renderGoals();
+      showToast('Shared goal added!');
+    });
+
+    document.getElementById('goalsGrid').addEventListener('submit', (e) => {
+      const form = e.target.closest('.contribute-goal-form');
+      if (!form) return;
+      e.preventDefault();
+      const id = form.dataset.goalId;
+      const val = parseFloat(form.querySelector('input').value);
+      if (isNaN(val) || val <= 0) return;
+      const goal = state.goals.find((g) => g.id === id);
+      if (!goal) return;
+      if (state.activeUser === 'p1') goal.p1Saved = Number(goal.p1Saved || 0) + val;
+      else goal.p2Saved = Number(goal.p2Saved || 0) + val;
+      saveState(true);
+      renderGoals();
+      showToast('Contribution added!');
+    });
+
+    document.getElementById('goalsGrid').addEventListener('click', (e) => {
+      const btn = e.target.closest('.del-goal-btn');
+      if (!btn) return;
+      const id = btn.dataset.delGoal;
+      state.goals = state.goals.filter((g) => g.id !== id);
+      saveState(true);
+      renderGoals();
+      showToast('Goal removed');
+    });
+
+    // Modals: Sync
+    const syncModal = document.getElementById('syncModal');
+    document.getElementById('openSyncBtn').addEventListener('click', () => {
+      document.getElementById('firebaseUrlInput').value = state.cloud.url || '';
+      document.getElementById('roomCodeInput').value = state.cloud.room || '';
+      syncModal.classList.remove('hidden');
+      syncModal.classList.add('flex');
+    });
+    document.getElementById('closeSyncBtn').addEventListener('click', () => {
+      syncModal.classList.add('hidden');
+      syncModal.classList.remove('flex')
+    });
+
+    document.getElementById('connectCloudBtn').addEventListener('click', async () => {
+      const url = document.getElementById('firebaseUrlInput').value.trim();
+      const room = document.getElementById('roomCodeInput').value.trim();
+      if (!url || !room) { 
+        showToast('Enter both a Firebase URL and Room Code');
+        return;
+      }
+      state.cloud = { url, room };
+      saveState(false);
+      await pullFromCloud(false);
+      startCloudPolling();
+    });
+
+    document.getElementById('disconnectCloudBtn').addEventListener('click', () => {
+      state.cloud = { url: '', room: '' };
+      saveState(false);
+      startCloudPolling();
+      showToast('Disconnected from live sync');
+    });
+
+    document.getElementById('copySyncCodeBtn').addEventListener('click', async () => {
+      const payload = JSON.stringify({ settings: state.settings, expenses: state.expenses, goals: state.goals });
+      const code = btoa(unescape(encodeURIComponent(payload)));
+      try {
+        await navigator.clipboard.writeText(code);
+        showToast('Sync code copied to clipboard!');
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = code;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('Sync code copied!');
+      }
+    });
+
+    document.getElementById('importCodeBtn').addEventListener('click', () => {
+      const code = document.getElementById('importCodeInput').value.trim();
+      if (!code) return;
+      try {
+        const parsed = JSON.parse(decodeURIComponent(escape(atob(code))));
+        if (!Array.isArray(parsed.expenses)) throw new Error('Invalid');
+        const existingIds = new Set(state.expenses.map((x) => x.id));
+        let added = 0;
+        parsed.expenses.forEach((exp) => {
+          if (exp.id && !existingIds.has(exp.id)) {
+            state.expenses.push(exp);
+            added++;
+          }
+        });
+        if (Array.isArray(parsed.goals)) {
+          const gIds = new Set(state.goals.map((g) => g.id));
+          parsed.goals.forEach((g) => {
+            if (g.id && !gIds.has(g.id)) state.goals.push(g);
+          });
+        }
+        document.getElementById('importCodeInput').value = '';
+        saveState(true);
+        renderAll();
+        showToast(`Merged ${added} new expense(s)!`);
+      } catch {
+        showToast('Invalid sync code');
+      }
+    });
+
+    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+      const { p1Name, p2Name } = state.settings;
+      const rows = [['Date', 'Title', 'Category', 'Paid By', 'Split Type', 'Amount', 'Note']];
+      state.expenses.forEach((e) => {
+        const who = e.paidBy === 'p1' ? p1Name : p2Name;
+        rows.push([e.date, e.title, e.category, who, e.splitType, e.amount, e.note || ''].map((v) => `"${String(v).replace(/"/g, '""')}"`));
+      });
+      const blob = new Blob([rows.map((r) => r.join(',')).join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `twofold-expenses-${todayStr()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('CSV exported!');
+    });
+
+    // Modals: Settings
+    const settingsModal = document.getElementById('settingsModal');
+    document.getElementById('openSettingsBtn').addEventListener('click', () => {
+      document.getElementById('setP1Name').value = state.settings.p1Name;
+      document.getElementById('setP2Name').value = state.settings.p2Name;
+      document.getElementById('setCurrency').value = state.settings.currency;
+      document.getElementById('setP1Budget').value = state.settings.p1Budget ?? 800;
+      document.getElementById('setP2Budget').value = state.settings.p2Budget ?? 700;
+      settingsModal.classList.remove('hidden');
+      settingsModal.classList.add('flex');
+    });
+    document.getElementById('closeSettingsBtn').addEventListener('click', () => {
+      settingsModal.classList.add('hidden');
+      settingsModal.classList.remove('flex');
+    });
+
+    document.getElementById('settingsForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      state.settings.p1Name = document.getElementById('setP1Name').value.trim() || 'Partner 1';
+      state.settings.p2Name = document.getElementById('setP2Name').value.trim() || 'Partner 2';
+      state.settings.currency = document.getElementById('setCurrency').value;
+      state.settings.p1Budget = Math.max(1, parseFloat(document.getElementById('setP1Budget').value) || 800);
+      state.settings.p2Budget = Math.max(1, parseFloat(document.getElementById('setP2Budget').value) || 700);
+      saveState(true);
+      renderAll();
+      settingsModal.classList.add('hidden');
+      settingsModal.classList.remove('flex');
+      showToast('Settings saved!');
+    });
+
+    document.getElementById('clearAllDataBtn').addEventListener('click', () => {
+      state.expenses = [];
+      state.goals = [];
+      saveState(true);
+      renderAll();
+      settingsModal.classList.add('hidden');
+      settingsModal.classList.remove('flex');
+      showToast('All entries cleared');
+    });
+
+    // Init
+    window.addEventListener('load', () => {
+      renderAll();
+      startCloudPolling();
+      if (window.lucide) lucide.createIcons();
+    });
+  </script>
+</body>
+</html>
