@@ -464,9 +464,12 @@
         p2Budget: 700
       },
       cloud: {
-        url: '',
-        room: ''
+        url: 'https://finance-1d088-default-rtdb.firebaseio.com',
+        room: 'yernazar-aiym-2026'
       },
+      deletedIds: [],
+      settingsUpdatedAt: 0,
+      lastSyncedAt: 0,
       expenses: [
         { id: 'e1', title: 'Morning Coffee & Pastries', amount: 18.50, category: 'Coffee & Dates', paidBy: 'p1', splitType: '50-50', date: daysAgoStr(0), note: 'From our favorite corner cafe', createdAt: Date.now() - 3600000 },
         { id: 'e2', title: 'Weekly Grocery Run', amount: 86.40, category: 'Groceries', paidBy: 'p2', splitType: '50-50', date: daysAgoStr(1), note: 'Produce, pasta, oat milk', createdAt: Date.now() - 86400000 },
@@ -538,49 +541,118 @@
       return String(str || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
     }
 
-    // Cloud Sync (Firebase Realtime DB REST)
+    // Cloud Sync (Firebase Realtime DB REST with safe two-way merge)
+    let isSyncing = false;
     async function pushToCloud() {
       if (!state.cloud.url || !state.cloud.room) return;
       const base = state.cloud.url.replace(/\/+$/, '');
       const endpoint = `${base}/twofold/${encodeURIComponent(state.cloud.room)}.json`;
+      const now = Date.now();
       try {
-        await fetch(endpoint, {
+        const res = await fetch(endpoint, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             settings: state.settings,
+            settingsUpdatedAt: state.settingsUpdatedAt || 0,
             expenses: state.expenses,
             goals: state.goals,
-            updatedAt: Date.now()
+            deletedIds: (state.deletedIds || []).slice(-200),
+            updatedAt: now
           })
         });
+        if (!res.ok) throw new Error('Push failed');
+        state.lastSyncedAt = now;
+        updateSyncIndicator(true);
       } catch {
         updateSyncIndicator(false);
       }
     }
 
     async function pullFromCloud(silent = true) {
-      if (!state.cloud.url || !state.cloud.room) return;
+      if (!state.cloud.url || !state.cloud.room || isSyncing) return;
+      isSyncing = true;
       const base = state.cloud.url.replace(/\/+$/, '');
       const endpoint = `${base}/twofold/${encodeURIComponent(state.cloud.room)}.json`;
       try {
         const res = await fetch(endpoint);
         if (!res.ok) throw new Error('Sync failed');
         const remote = await res.json();
-        if (remote && Array.isArray(remote.expenses)) {
-          state.expenses = remote.expenses;
-          if (remote.settings) state.settings = { ...state.settings, ...remote.settings };
-          if (Array.isArray(remote.goals)) state.goals = remote.goals;
-          saveState(false);
-          renderAll();
-        } else if (remote === null) {
+        if (remote === null) {
           await pushToCloud();
+        } else if (remote && typeof remote === 'object') {
+          if (silent && remote.updatedAt && remote.updatedAt === state.lastSyncedAt) {
+            updateSyncIndicator(true);
+            isSyncing = false;
+            return;
+          }
+
+          const beforeSnapshot = JSON.stringify({
+            s: state.settings,
+            e: state.expenses,
+            g: state.goals
+          });
+
+          const deletedSet = new Set([...(state.deletedIds || []), ...(remote.deletedIds || [])]);
+          state.deletedIds = Array.from(deletedSet).slice(-200);
+
+          const remoteExpenses = Array.isArray(remote.expenses) ? remote.expenses : [];
+          const expMap = new Map();
+          remoteExpenses.forEach((item) => {
+            if (item && item.id && !deletedSet.has(item.id)) expMap.set(item.id, item);
+          });
+          (state.expenses || []).forEach((item) => {
+            if (item && item.id && !deletedSet.has(item.id) && !expMap.has(item.id)) {
+              expMap.set(item.id, item);
+            }
+          });
+          state.expenses = Array.from(expMap.values());
+
+          const remoteGoals = Array.isArray(remote.goals) ? remote.goals : [];
+          const goalMap = new Map();
+          remoteGoals.forEach((g) => {
+            if (g && g.id && !deletedSet.has(g.id)) goalMap.set(g.id, g);
+          });
+          (state.goals || []).forEach((g) => {
+            if (g && g.id && !deletedSet.has(g.id) && !goalMap.has(g.id)) {
+              goalMap.set(g.id, g);
+            }
+          });
+          state.goals = Array.from(goalMap.values());
+
+          if (remote.settings && (remote.settingsUpdatedAt || 0) >= (state.settingsUpdatedAt || 0)) {
+            state.settings = { ...state.settings, ...remote.settings };
+            state.settingsUpdatedAt = remote.settingsUpdatedAt || state.settingsUpdatedAt || 0;
+          }
+
+          state.lastSyncedAt = remote.updatedAt || Date.now();
+          const afterSnapshot = JSON.stringify({
+            s: state.settings,
+            e: state.expenses,
+            g: state.goals
+          });
+
+          const remoteSnapshot = JSON.stringify({
+            s: remote.settings || state.settings,
+            e: remoteExpenses,
+            g: remoteGoals
+          });
+
+          if (beforeSnapshot !== afterSnapshot) {
+            saveState(false);
+            renderAll();
+          }
+          if (afterSnapshot !== remoteSnapshot) {
+            await pushToCloud();
+          }
         }
         updateSyncIndicator(true);
         if (!silent) showToast('Connected to live couple sync!');
       } catch {
         updateSyncIndicator(false);
         if (!silent) showToast('Could not reach database URL. Check permissions or URL.');
+      } finally {
+        isSyncing = false;
       }
     }
 
@@ -588,7 +660,8 @@
       if (syncInterval) clearInterval(syncInterval);
       if (state.cloud.url && state.cloud.room) {
         updateSyncIndicator(true);
-        syncInterval = setInterval(() => pullFromCloud(true), 5000);
+        pullFromCloud(true);
+        syncInterval = setInterval(() => pullFromCloud(true), 4000);
       } else {
         updateSyncIndicator(false);
       }
@@ -1026,6 +1099,8 @@
       const btn = e.target.closest('.delete-exp-btn');
       if (!btn) return;
       const id = btn.dataset.deleteId;
+      if (!state.deletedIds) state.deletedIds = [];
+      state.deletedIds.push(id);
       state.expenses = state.expenses.filter((x) => x.id !== id);
       saveState(true);
       renderAll();
@@ -1140,6 +1215,8 @@
       const btn = e.target.closest('.del-goal-btn');
       if (!btn) return;
       const id = btn.dataset.delGoal;
+      if (!state.deletedIds) state.deletedIds = [];
+      state.deletedIds.push(id);
       state.goals = state.goals.filter((g) => g.id !== id);
       saveState(true);
       renderGoals();
@@ -1265,6 +1342,7 @@
       state.settings.currency = document.getElementById('setCurrency').value;
       state.settings.p1Budget = Math.max(1, parseFloat(document.getElementById('setP1Budget').value) || 800);
       state.settings.p2Budget = Math.max(1, parseFloat(document.getElementById('setP2Budget').value) || 700);
+      state.settingsUpdatedAt = Date.now();
       saveState(true);
       renderAll();
       settingsModal.classList.add('hidden');
@@ -1273,6 +1351,9 @@
     });
 
     document.getElementById('clearAllDataBtn').addEventListener('click', () => {
+      if (!state.deletedIds) state.deletedIds = [];
+      state.expenses.forEach((x) => state.deletedIds.push(x.id));
+      state.goals.forEach((g) => state.deletedIds.push(g.id));
       state.expenses = [];
       state.goals = [];
       saveState(true);
